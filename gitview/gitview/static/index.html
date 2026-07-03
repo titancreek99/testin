@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GitView</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">⎇</span>
+      <span class="title">GitView</span>
+    </div>
+    <div class="repo-meta" id="repo-meta">Loading repository…</div>
+    <button id="refresh" class="btn" title="Reload data">↻ Refresh</button>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <nav class="tabs">
+        <button class="tab active" data-tab="graph">Graph</button>
+        <button class="tab" data-tab="branches">Branches</button>
+        <button class="tab" data-tab="remotes">Remotes</button>
+        <button class="tab" data-tab="tags">Tags</button>
+      </nav>
+      <div class="stats" id="stats"></div>
+
+      <section class="panel" id="panel-branches">
+        <h3>Branches</h3>
+        <ul class="list" id="branch-list"></ul>
+      </section>
+      <section class="panel hidden" id="panel-remotes">
+        <h3>Remotes</h3>
+        <ul class="list" id="remote-list"></ul>
+      </section>
+      <section class="panel hidden" id="panel-tags">
+        <h3>Tags</h3>
+        <ul class="list" id="tag-list"></ul>
+      </section>
+    </aside>
+
+    <main class="content">
+      <div class="graph-wrap" id="graph-wrap">
+        <svg id="graph-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+    </main>
+
+    <aside class="details" id="details">
+      <div class="details-empty">Select a commit to see details.</div>
+    </aside>
+  </div>
+
+  <div class="error-banner hidden" id="error-banner"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

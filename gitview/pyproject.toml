@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gitview"
+version = "1.0.0"
+description = "Browser-based interactive git repository analyzer (commits, branches, remotes, tags)."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "GitView contributors" }]
+keywords = ["git", "visualization", "graph", "commits", "browser"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Web Environment",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Version Control :: Git",
+]
+dependencies = []
+
+[project.scripts]
+gitview = "gitview.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/titancreek99/testin"
+
+[tool.setuptools]
+packages = ["gitview"]
+
+[tool.setuptools.package-data]
+gitview = ["static/*"]
