@@ -13,13 +13,20 @@
       <span class="title">GitView</span>
     </div>
     <div class="repo-meta" id="repo-meta">Loading repository…</div>
+    <div class="search-box">
+      <input id="search" type="search" placeholder="Search commits…  ( / )"
+             autocomplete="off" spellcheck="false" />
+      <span class="search-count" id="search-count"></span>
+    </div>
+    <button id="density-toggle" class="btn" title="Toggle row density">▤ Compact</button>
+    <button id="theme-toggle" class="btn" title="Toggle light/dark theme">☀ Light</button>
     <button id="refresh" class="btn" title="Reload data">↻ Refresh</button>
   </header>
 
   <div class="layout">
     <aside class="sidebar">
       <nav class="tabs">
-        <button class="tab active" data-tab="graph">Graph</button>
+        <button class="tab active" data-tab="graph">All</button>
         <button class="tab" data-tab="branches">Branches</button>
         <button class="tab" data-tab="remotes">Remotes</button>
         <button class="tab" data-tab="tags">Tags</button>
@@ -30,11 +37,11 @@
         <h3>Branches</h3>
         <ul class="list" id="branch-list"></ul>
       </section>
-      <section class="panel hidden" id="panel-remotes">
+      <section class="panel" id="panel-remotes">
         <h3>Remotes</h3>
         <ul class="list" id="remote-list"></ul>
       </section>
-      <section class="panel hidden" id="panel-tags">
+      <section class="panel" id="panel-tags">
         <h3>Tags</h3>
         <ul class="list" id="tag-list"></ul>
       </section>
@@ -42,15 +49,20 @@
 
     <main class="content">
       <div class="graph-wrap" id="graph-wrap">
+        <div id="graph-empty" class="loading hidden">No commits yet in this repository.</div>
         <svg id="graph-svg" xmlns="http://www.w3.org/2000/svg"></svg>
       </div>
     </main>
 
     <aside class="details" id="details">
-      <div class="details-empty">Select a commit to see details.</div>
+      <div class="details-empty">Select a commit to see details.<br /><br />
+        <span class="dim">Tips: click any row, use ↑ / ↓ to move,
+        press <b>/</b> to search, hover a row for a summary.</span>
+      </div>
     </aside>
   </div>
 
+  <div class="tooltip hidden" id="tooltip"></div>
   <div class="error-banner hidden" id="error-banner"></div>
 
   <script src="/app.js"></script>

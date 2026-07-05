@@ -8,18 +8,30 @@ including a graph/tree visualization of history — right in your browser.
 It uses **only the Python standard library** (plus the `git` executable), so
 there is nothing to `pip install`.
 
-![overview](docs/screenshot-placeholder.txt)
+![GitView dark theme](docs/screenshot-dark.png)
+![GitView light theme](docs/screenshot-light.png)
 
 ## Features
 
-- 📊 **Interactive commit graph** — a lane-based tree/graph of all branches with
-  merge lines, drawn as SVG (no external JS libraries).
-- 🌿 **Branches** — local and remote-tracking branches, current `HEAD` marked,
-  each linking to its tip commit.
+- 📊 **Interactive commit graph** — a rail-based tree/graph of all branches with
+  smooth branch/merge curves, merge commits drawn as rings and `HEAD` marked
+  with a halo, all rendered as SVG (no external JS libraries).
+- 🖱️ **Hover tooltips** — hover any row for a summary (hash, author, date, refs)
+  without leaving the graph.
+- 🔎 **Search** — press `/` and type to filter commits by message, author, hash
+  or ref; `Enter` / `Shift+Enter` cycles through matches.
+- ⌨️ **Keyboard navigation** — `↑` / `↓` move the selection through history.
+- 🌗 **Light & dark themes** — toggle in the top bar; the lane palette is
+  stepped per theme and validated for color-vision-deficiency separation.
+- ▤ **Compact / comfortable density** — switch between a roomy two-line view
+  and a dense one-line-per-commit view.
+- 🌿 **Branches** — local and remote-tracking branches with upstreams, current
+  `HEAD` marked; hovering a branch highlights its tip commit in the graph.
 - 🔗 **Remotes** — every configured remote with fetch/push URLs.
 - 🏷️ **Tags** — lightweight and annotated tags linking to their target commit.
-- 🔍 **Commit details** — click any commit (or branch/tag) to see author, date,
-  parents, full message and the list of changed files with `+/-` line counts.
+- 🔍 **Commit details** — click any commit (or branch/tag) to see author,
+  committer, dates, clickable parent links, full message, a copy-hash button
+  and per-file `+/-` counts with proportional diff bars.
 - 🖥️ **Everything in one browser window** — a single-page app served locally.
 
 ## Requirements
