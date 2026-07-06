@@ -17,6 +17,8 @@
   --row-hover: rgba(255, 255, 255, 0.04);
   --row-select: rgba(57, 135, 229, 0.16);
   --shadow: rgba(0, 0, 0, 0.55);
+  --diff-add-bg: rgba(12, 163, 12, 0.14);
+  --diff-del-bg: rgba(230, 103, 103, 0.14);
 }
 
 :root[data-theme="light"] {
@@ -37,6 +39,8 @@
   --row-hover: rgba(0, 0, 0, 0.035);
   --row-select: rgba(42, 120, 214, 0.12);
   --shadow: rgba(80, 80, 90, 0.28);
+  --diff-add-bg: rgba(0, 99, 0, 0.10);
+  --diff-del-bg: rgba(196, 43, 43, 0.09);
 }
 
 * { box-sizing: border-box; }
@@ -246,6 +250,74 @@ body { display: flex; flex-direction: column; }
 .diffbar i { display: block; height: 100%; }
 .bar-add { background: var(--good); }
 .bar-del { background: var(--bad); }
+
+/* -- diff viewer ----------------------------------------------------------------- */
+.file-row { flex-direction: column; align-items: stretch; gap: 0; padding: 0; }
+.file-row:hover { background: transparent; }
+.file-line {
+  display: flex; gap: 8px; align-items: center; padding: 4px 0; cursor: pointer;
+  border-radius: 4px;
+}
+.file-line:hover { background: var(--bg-elev); }
+.caret { color: var(--text-dim); width: 12px; flex: 0 0 auto; font-size: 10px; }
+.filediff { margin: 2px 0 8px 12px; }
+.diff-scroll {
+  overflow-x: auto; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); max-height: 420px; overflow-y: auto;
+}
+.diff-table { border-collapse: collapse; width: 100%; font-size: 11.5px; }
+.diff-table td { padding: 1px 6px; vertical-align: top; }
+.diff-table .ln {
+  color: var(--text-dim); text-align: right; user-select: none; min-width: 30px;
+  border-right: 1px solid var(--border); font-variant-numeric: tabular-nums;
+}
+.diff-table .code { white-space: pre; font-family: ui-monospace, monospace; }
+.diff-table .sign { display: inline-block; width: 12px; color: var(--text-dim); }
+.diff-hunk .code { color: var(--accent); background: var(--accent-wash); }
+.diff-add .code { background: var(--diff-add-bg); }
+.diff-add .sign { color: var(--good); }
+.diff-del .code { background: var(--diff-del-bg); }
+.diff-del .sign { color: var(--bad); }
+.diff-metaline .code { color: var(--text-dim); font-style: italic; }
+.diff-note { color: var(--text-dim); font-size: 11px; padding: 4px 2px; font-style: italic; }
+
+/* -- reflog ------------------------------------------------------------------------ */
+.reflog-kind {
+  flex: 0 0 auto; font-size: 10px; font-weight: 600; color: var(--text-dim);
+  border: 1px solid var(--border); border-radius: 8px; padding: 1px 6px;
+  text-transform: lowercase;
+}
+
+/* -- working tree card --------------------------------------------------------------- */
+.wt-card {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 10px; margin-bottom: 10px; font-size: 12px; min-height: 34px;
+}
+.wt-card.wt-dirty { border-color: var(--tag); }
+.wt-title { color: var(--text-dim); text-transform: uppercase; font-size: 10px; letter-spacing: .5px; }
+.wt-clean { color: var(--good); font-weight: 600; }
+.wt-bit b { font-weight: 700; }
+
+/* -- live indicator -------------------------------------------------------------------- */
+.live-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--good); vertical-align: 1px;
+}
+.btn.live-on .live-dot { animation: pulse 2s ease-in-out infinite; }
+.btn.live-off .live-dot { background: var(--text-dim); animation: none; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+
+/* -- toast -------------------------------------------------------------------------------- */
+.toast {
+  position: fixed; top: 58px; left: 50%; transform: translateX(-50%);
+  background: var(--bg-elev); color: var(--text); border: 1px solid var(--accent);
+  border-radius: 8px; padding: 8px 16px; font-size: 12px; z-index: 70;
+  box-shadow: 0 6px 24px var(--shadow);
+}
 
 /* -- misc ----------------------------------------------------------------------- */
 .error-banner {

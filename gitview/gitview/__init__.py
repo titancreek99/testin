@@ -5,4 +5,4 @@ an interactive browser view of its commits, branches, remotes and tags,
 including a graph/tree visualization of history.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"

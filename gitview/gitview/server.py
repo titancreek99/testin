@@ -97,6 +97,17 @@ class GitViewHandler(BaseHTTPRequestHandler):
             self._send_json({"remotes": repo.remotes()})
         elif path == "/api/tags":
             self._send_json({"tags": repo.tags()})
+        elif path == "/api/reflog":
+            limit = _int_param(query, "limit", default=200)
+            self._send_json({"reflog": repo.reflog(limit=limit)})
+        elif path == "/api/state":
+            self._send_json({
+                "token": repo.state_token(),
+                "status": repo.working_status(),
+            })
+        elif path.startswith("/api/diff/"):
+            rev = path[len("/api/diff/"):]
+            self._send_json(repo.commit_diff(rev))
         elif path.startswith("/api/commit/"):
             rev = path[len("/api/commit/"):]
             self._send_json(repo.commit_detail(rev))

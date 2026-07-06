@@ -18,6 +18,8 @@
              autocomplete="off" spellcheck="false" />
       <span class="search-count" id="search-count"></span>
     </div>
+    <button id="live-toggle" class="btn live-on" title="Live updates: watching the repository for changes">
+      <span class="live-dot"></span> Live</button>
     <button id="density-toggle" class="btn" title="Toggle row density">▤ Compact</button>
     <button id="theme-toggle" class="btn" title="Toggle light/dark theme">☀ Light</button>
     <button id="refresh" class="btn" title="Reload data">↻ Refresh</button>
@@ -30,7 +32,9 @@
         <button class="tab" data-tab="branches">Branches</button>
         <button class="tab" data-tab="remotes">Remotes</button>
         <button class="tab" data-tab="tags">Tags</button>
+        <button class="tab" data-tab="reflog">Reflog</button>
       </nav>
+      <div class="wt-card" id="wt-card"></div>
       <div class="stats" id="stats"></div>
 
       <section class="panel" id="panel-branches">
@@ -44,6 +48,10 @@
       <section class="panel" id="panel-tags">
         <h3>Tags</h3>
         <ul class="list" id="tag-list"></ul>
+      </section>
+      <section class="panel hidden" id="panel-reflog">
+        <h3>Reflog (HEAD)</h3>
+        <ul class="list" id="reflog-list"></ul>
       </section>
     </aside>
 
@@ -63,6 +71,7 @@
   </div>
 
   <div class="tooltip hidden" id="tooltip"></div>
+  <div class="toast hidden" id="toast"></div>
   <div class="error-banner hidden" id="error-banner"></div>
 
   <script src="/app.js"></script>

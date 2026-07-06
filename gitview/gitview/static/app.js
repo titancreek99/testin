@@ -36,6 +36,10 @@ const state = {
   filter: "",
   matches: [],
   matchIdx: -1,
+  reflog: [],
+  diffCache: new Map(),   // commit hash -> parsed diff payload
+  lastToken: null,
+  liveEnabled: true,
 };
 
 /* -- api / errors -------------------------------------------------------- */
@@ -408,20 +412,25 @@ function renderDetails(d) {
   ).join(", ") || "— (root commit)";
 
   const maxChange = Math.max(1, ...(d.files || []).map((f) => (f.added || 0) + (f.removed || 0)));
-  const files = (d.files || []).map((f) => {
+  const files = (d.files || []).map((f, idx) => {
+    let line;
     if (f.binary) {
-      return `<li><span class="file-bin">BIN</span>
-        <span class="path" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</span></li>`;
+      line = `<span class="file-bin">BIN</span>
+        <span class="path" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</span>`;
+    } else {
+      const total = (f.added || 0) + (f.removed || 0);
+      const w = Math.max(4, Math.round((total / maxChange) * 56));
+      const aw = total ? Math.round((f.added / total) * w) : 0;
+      line = `<span class="add">+${f.added}</span><span class="del">−${f.removed}</span>
+        <span class="diffbar" style="width:${w}px">
+          <i class="bar-add" style="width:${aw}px"></i><i class="bar-del" style="width:${w - aw}px"></i>
+        </span>
+        <span class="path" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</span>`;
     }
-    const total = (f.added || 0) + (f.removed || 0);
-    const w = Math.max(4, Math.round((total / maxChange) * 56));
-    const aw = total ? Math.round((f.added / total) * w) : 0;
-    return `<li>
-      <span class="add">+${f.added}</span><span class="del">−${f.removed}</span>
-      <span class="diffbar" style="width:${w}px">
-        <i class="bar-add" style="width:${aw}px"></i><i class="bar-del" style="width:${w - aw}px"></i>
-      </span>
-      <span class="path" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</span></li>`;
+    return `<li class="file-row" data-path="${escapeHtml(f.path)}" data-idx="${idx}">
+      <div class="file-line"><span class="caret">▸</span>${line}</div>
+      <div class="filediff hidden"></div>
+    </li>`;
   }).join("");
 
   const committerRow = d.committer_name && d.committer_name !== d.author_name
@@ -465,6 +474,87 @@ function renderDetails(d) {
       selectCommit(a.dataset.hash, true);
     });
   });
+  panel.querySelectorAll(".file-row").forEach((li) => {
+    li.querySelector(".file-line").addEventListener("click", () =>
+      toggleFileDiff(d.hash, li));
+  });
+}
+
+/* -- diff viewer ------------------------------------------------------------- */
+async function fetchDiff(hash) {
+  if (state.diffCache.has(hash)) return state.diffCache.get(hash);
+  const promise = api(`/api/diff/${hash}`);
+  state.diffCache.set(hash, promise);
+  try {
+    const data = await promise;
+    state.diffCache.set(hash, data);
+    return data;
+  } catch (e) {
+    state.diffCache.delete(hash);
+    throw e;
+  }
+}
+
+async function toggleFileDiff(hash, li) {
+  const box = li.querySelector(".filediff");
+  const caret = li.querySelector(".caret");
+  const open = !box.classList.contains("hidden");
+  if (open) {
+    box.classList.add("hidden");
+    caret.textContent = "▸";
+    return;
+  }
+  caret.textContent = "▾";
+  box.classList.remove("hidden");
+  if (!box.dataset.loaded) {
+    box.innerHTML = '<div class="diff-note">Loading diff…</div>';
+    try {
+      const diff = await fetchDiff(hash);
+      const path = li.dataset.path;
+      const file = (diff.files || []).find(
+        (f) => f.path === path || f.old_path === path);
+      renderFileDiff(box, file, diff.truncated);
+      box.dataset.loaded = "1";
+    } catch (e) {
+      box.innerHTML = `<div class="diff-note">${escapeHtml(e.message)}</div>`;
+    }
+  }
+}
+
+function renderFileDiff(box, file, truncated) {
+  if (!file) {
+    box.innerHTML = '<div class="diff-note">No diff available for this file'
+      + (truncated ? " (diff truncated — commit too large)." : ".") + "</div>";
+    return;
+  }
+  if (file.binary) {
+    box.innerHTML = '<div class="diff-note">Binary file — no text diff.</div>';
+    return;
+  }
+  if (!file.hunks.length) {
+    box.innerHTML = '<div class="diff-note">No content changes (mode change or rename only).</div>';
+    return;
+  }
+  const rows = [];
+  const status = file.status !== "modified"
+    ? `<div class="diff-note">${escapeHtml(file.status)}${file.old_path
+        ? ` from ${escapeHtml(file.old_path)}` : ""}</div>` : "";
+  file.hunks.forEach((h) => {
+    rows.push(`<tr class="diff-hunk"><td class="ln"></td><td class="ln"></td>
+      <td class="code">${escapeHtml(h.header)}</td></tr>`);
+    h.lines.forEach((l) => {
+      const cls = l.t === "add" ? "diff-add" : l.t === "del" ? "diff-del"
+        : l.t === "meta" ? "diff-metaline" : "diff-ctx";
+      const sign = l.t === "add" ? "+" : l.t === "del" ? "−" : " ";
+      rows.push(`<tr class="${cls}">
+        <td class="ln">${l.o == null ? "" : l.o}</td>
+        <td class="ln">${l.n == null ? "" : l.n}</td>
+        <td class="code"><span class="sign">${sign}</span>${escapeHtml(l.s)}</td></tr>`);
+    });
+  });
+  box.innerHTML = status
+    + `<div class="diff-scroll"><table class="diff-table">${rows.join("")}</table></div>`
+    + (truncated ? '<div class="diff-note">⚠ Diff truncated — commit too large to show fully.</div>' : "");
 }
 
 /* -- sidebar panels ------------------------------------------------------------- */
@@ -541,6 +631,51 @@ function renderTags() {
   });
 }
 
+function renderReflog() {
+  const list = document.getElementById("reflog-list");
+  if (!state.reflog.length) {
+    list.innerHTML = '<li class="dim" style="cursor:default">No reflog entries.</li>';
+    return;
+  }
+  list.innerHTML = state.reflog.map((r) => {
+    const [kind, rest] = splitAction(r.action);
+    return `<li data-hash="${r.hash}" class="reflog-item" title="${escapeHtml(r.action)}">
+      <span class="reflog-kind">${escapeHtml(kind)}</span>
+      <span class="branch-name">${escapeHtml(rest)}
+        <div class="sub">${escapeHtml(r.selector)} · ${relTime(r.date)}</div></span>
+      <span class="mono badge">${escapeHtml(r.short)}</span>
+    </li>`;
+  }).join("");
+  list.querySelectorAll("li[data-hash]").forEach((li) => {
+    li.addEventListener("click", () => selectCommit(li.dataset.hash, true));
+    li.addEventListener("mouseenter", () => highlightRow(li.dataset.hash, true));
+    li.addEventListener("mouseleave", () => highlightRow(li.dataset.hash, false));
+  });
+}
+
+function splitAction(action) {
+  const i = action.indexOf(":");
+  if (i < 0) return [action, ""];
+  return [action.slice(0, i), action.slice(i + 1).trim()];
+}
+
+function renderWtCard(status) {
+  const card = document.getElementById("wt-card");
+  if (!status) { card.innerHTML = ""; return; }
+  if (status.clean) {
+    card.innerHTML = `<span class="wt-clean">✓ Working tree clean</span>`;
+    card.classList.remove("wt-dirty");
+    return;
+  }
+  card.classList.add("wt-dirty");
+  const bit = (n, label) => n
+    ? `<span class="wt-bit"><b>${n}</b> ${label}</span>` : "";
+  card.innerHTML = `<span class="wt-title">Working tree</span>
+    ${bit(status.staged, "staged")}
+    ${bit(status.unstaged, "modified")}
+    ${bit(status.untracked, "untracked")}`;
+}
+
 function laneColorForCommit(hash) {
   const row = state.hashToRow.get(hash);
   if (row === undefined) return "var(--text-dim)";
@@ -554,10 +689,14 @@ function setupTabs() {
       document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
       tab.classList.add("active");
       const which = tab.dataset.tab;
-      const panels = { branches: "panel-branches", remotes: "panel-remotes", tags: "panel-tags" };
+      const panels = {
+        branches: "panel-branches", remotes: "panel-remotes",
+        tags: "panel-tags", reflog: "panel-reflog",
+      };
       Object.entries(panels).forEach(([key, id]) => {
-        document.getElementById(id).classList.toggle(
-          "hidden", which !== "graph" && key !== which);
+        // "All" shows everything except the (long) reflog.
+        const hide = which === "graph" ? key === "reflog" : key !== which;
+        document.getElementById(id).classList.toggle("hidden", hide);
       });
     });
   });
@@ -613,29 +752,87 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+/* -- live updates -------------------------------------------------------------------------- */
+const LIVE_POLL_MS = 2500;
+
+function setLive(enabled) {
+  state.liveEnabled = enabled;
+  const btn = document.getElementById("live-toggle");
+  btn.classList.toggle("live-on", enabled);
+  btn.classList.toggle("live-off", !enabled);
+  btn.innerHTML = `<span class="live-dot"></span> ${enabled ? "Live" : "Paused"}`;
+  btn.title = enabled
+    ? "Live updates: watching the repository for changes (click to pause)"
+    : "Live updates paused (click to resume)";
+}
+
+async function pollState() {
+  if (!state.liveEnabled || document.hidden) return;
+  try {
+    const s = await api("/api/state");
+    renderWtCard(s.status);
+    if (state.lastToken !== null && s.token !== state.lastToken) {
+      await loadAll(); // loadAll refreshes the token itself
+      toast("Repository changed — view refreshed");
+    } else {
+      state.lastToken = s.token;
+    }
+  } catch (e) { /* server briefly unreachable; retry next tick */ }
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add("hidden"), 2500);
+}
+
 /* -- boot ---------------------------------------------------------------------------------- */
 async function loadAll() {
   clearError();
   try {
-    const [info, commits, branches, remotes, tags] = await Promise.all([
+    const [info, commits, branches, remotes, tags, reflog, st] = await Promise.all([
       api("/api/info"),
       api("/api/commits?limit=1000"),
       api("/api/branches"),
       api("/api/remotes"),
       api("/api/tags"),
+      api("/api/reflog?limit=200"),
+      api("/api/state"),
     ]);
+    // Baseline the change token here so edits made between page load and
+    // the first poll are not silently absorbed.
+    state.lastToken = st.token;
     state.info = info;
     state.commits = commits.commits;
     state.branches = branches.branches;
     state.remotes = remotes.remotes;
     state.tags = tags.tags;
+    state.reflog = reflog.reflog;
+    if (state.diffCache.size > 50) state.diffCache.clear();
+
+    const content = document.querySelector(".content");
+    const scrollTop = content.scrollTop;
 
     renderStats();
+    renderWtCard(st.status);
     renderGraph();
     renderBranches();
     renderRemotes();
     renderTags();
+    renderReflog();
     runFilter();
+
+    content.scrollTop = scrollTop;
+    // Keep the details pane in sync if the selected commit vanished
+    // (e.g. it was amended or its branch was deleted).
+    if (state.selected && !state.hashToRow.has(state.selected)) {
+      state.selected = null;
+      document.getElementById("details").innerHTML =
+        '<div class="details-empty">The selected commit is no longer reachable.</div>';
+    }
   } catch (e) {
     showError(e.message);
   }
@@ -650,6 +847,10 @@ window.addEventListener("DOMContentLoaded", () => {
   setupKeyboard();
 
   document.getElementById("refresh").addEventListener("click", loadAll);
+  document.getElementById("live-toggle").addEventListener("click", () =>
+    setLive(!state.liveEnabled));
+  setLive(true);
+  setInterval(pollState, LIVE_POLL_MS);
   document.getElementById("theme-toggle").addEventListener("click", () => {
     applyTheme(currentTheme() === "dark" ? "light" : "dark");
     renderGraph();

@@ -105,6 +105,65 @@ class RepoTest(unittest.TestCase):
         self.assertIn("files", detail)
         self.assertIn("stats", detail)
 
+    def test_commit_diff_regular(self):
+        # "second commit" modifies a.txt: one added line ("two").
+        commits = self.repo.commits()
+        second = next(c for c in commits if c["subject"] == "second commit")
+        diff = self.repo.commit_diff(second["hash"])
+        self.assertFalse(diff["truncated"])
+        self.assertEqual(len(diff["files"]), 1)
+        f = diff["files"][0]
+        self.assertEqual(f["path"], "a.txt")
+        self.assertEqual(f["status"], "modified")
+        adds = [l for h in f["hunks"] for l in h["lines"] if l["t"] == "add"]
+        self.assertEqual([l["s"] for l in adds], ["two"])
+        # Line numbers are tracked.
+        self.assertEqual(adds[0]["n"], 2)
+
+    def test_commit_diff_merge_uses_first_parent(self):
+        merge = next(c for c in self.repo.commits() if len(c["parents"]) > 1)
+        diff = self.repo.commit_diff(merge["hash"])
+        # vs first parent (main), the merge brings in b.txt from feature.
+        paths = [f["path"] for f in diff["files"]]
+        self.assertEqual(paths, ["b.txt"])
+        self.assertEqual(diff["files"][0]["status"], "added")
+        self.assertEqual(diff["against"], merge["parents"][0])
+
+    def test_commit_diff_root(self):
+        root = next(c for c in self.repo.commits() if not c["parents"])
+        diff = self.repo.commit_diff(root["hash"])
+        self.assertEqual([f["path"] for f in diff["files"]], ["a.txt"])
+        self.assertEqual(diff["files"][0]["status"], "added")
+
+    def test_reflog(self):
+        entries = self.repo.reflog()
+        self.assertGreater(len(entries), 0)
+        head = self.repo.commits(limit=1)[0]
+        self.assertEqual(entries[0]["hash"], head["hash"])
+        self.assertTrue(all(e["action"] for e in entries))
+        # Setup did a checkout, which must appear in the reflog.
+        self.assertTrue(any(e["action"].startswith("checkout:") for e in entries))
+
+    def test_working_status_and_state_token(self):
+        self.assertTrue(self.repo.working_status()["clean"])
+        token_before = self.repo.state_token()
+
+        self._write("new.txt", "hello\n")
+        status = self.repo.working_status()
+        self.assertFalse(status["clean"])
+        self.assertEqual(status["untracked"], 1)
+        token_untracked = self.repo.state_token()
+        self.assertNotEqual(token_before, token_untracked)
+
+        git(self.tmp, "add", "new.txt")
+        status = self.repo.working_status()
+        self.assertEqual(status["staged"], 1)
+        self.assertEqual(status["untracked"], 0)
+
+        git(self.tmp, "commit", "-q", "-m", "add new file")
+        self.assertTrue(self.repo.working_status()["clean"])
+        self.assertNotEqual(self.repo.state_token(), token_before)
+
 
 if __name__ == "__main__":
     unittest.main()

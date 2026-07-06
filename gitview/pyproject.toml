@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gitview"
-version = "1.0.0"
+version = "1.1.0"
 description = "Browser-based interactive git repository analyzer (commits, branches, remotes, tags)."
 readme = "README.md"
 requires-python = ">=3.8"

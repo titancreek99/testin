@@ -8,7 +8,9 @@ and a working ``git`` executable.
 
 from __future__ import annotations
 
+import hashlib
 import os
+import re
 import subprocess
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List, Optional
@@ -101,6 +103,7 @@ class Repo:
             "current_branch": head,
             "is_empty": is_empty,
             "head_detached": head is None and not is_empty,
+            "status": self.working_status(),
             "counts": {
                 "commits": self.commit_count(),
                 "branches": len(self.branches()),
@@ -285,6 +288,164 @@ class Repo:
             "removed": sum(f["removed"] or 0 for f in files),
         }
         return detail
+
+    # Cap parsed diff output so a huge commit cannot stall the browser.
+    MAX_DIFF_LINES = 5000
+
+    def commit_diff(self, rev: str) -> Dict[str, Any]:
+        """Return the unified diff of a commit, parsed into files and hunks.
+
+        Non-merge commits diff against their (single) parent or the empty
+        tree; merge commits diff against their first parent, which is what
+        reviewers usually want to see.
+        """
+        meta = self.commits(limit=1, all_refs=False, rev=rev)
+        if not meta:
+            raise GitError(f"Unknown revision: {rev}")
+        parents = meta[0]["parents"]
+        if len(parents) > 1:
+            args = ["diff", parents[0], meta[0]["hash"]]
+        else:
+            args = ["show", "--format=", "--patch", meta[0]["hash"]]
+        out = self._run(args, check=False)
+        files, truncated = _parse_unified_diff(out, self.MAX_DIFF_LINES)
+        return {
+            "hash": meta[0]["hash"],
+            "against": parents[0] if parents else None,
+            "files": files,
+            "truncated": truncated,
+        }
+
+    def reflog(self, limit: int = 200) -> List[Dict[str, Any]]:
+        """Return HEAD reflog entries (newest first)."""
+        fmt = _FS.join(["%H", "%h", "%gd", "%gs", "%ct"])
+        out = self._run(
+            ["log", "-g", f"--max-count={limit}", f"--format={fmt}"],
+            check=False,
+        )
+        entries = []
+        for line in out.splitlines():
+            parts = line.split(_FS)
+            if len(parts) < 5:
+                continue
+            h, short, selector, action, ct = parts[:5]
+            entries.append({
+                "hash": h,
+                "short": short,
+                "selector": selector,
+                "action": action,
+                "date": int(ct) if ct.isdigit() else 0,
+            })
+        return entries
+
+    def working_status(self) -> Dict[str, Any]:
+        """Summarize the working tree: staged / unstaged / untracked counts."""
+        out = self._run(["status", "--porcelain"], check=False)
+        staged = unstaged = untracked = 0
+        for line in out.splitlines():
+            if len(line) < 2:
+                continue
+            if line.startswith("??"):
+                untracked += 1
+                continue
+            x, y = line[0], line[1]
+            if x not in (" ", "?"):
+                staged += 1
+            if y not in (" ", "?"):
+                unstaged += 1
+        return {
+            "staged": staged,
+            "unstaged": unstaged,
+            "untracked": untracked,
+            "clean": staged == 0 and unstaged == 0 and untracked == 0,
+        }
+
+    def state_token(self) -> str:
+        """A cheap fingerprint of repository state for change polling.
+
+        Covers all refs, HEAD (including detached), and the working tree,
+        so any commit, branch move, checkout, or file edit changes it.
+        """
+        refs = self._run(
+            ["for-each-ref", "--format=%(refname)%(objectname)"], check=False)
+        head = self._run(["rev-parse", "HEAD"], check=False)
+        sym = self._run(["symbolic-ref", "-q", "HEAD"], check=False)
+        status = self._run(["status", "--porcelain"], check=False)
+        blob = "\n".join([refs, head, sym, status]).encode("utf-8", "replace")
+        return hashlib.sha1(blob).hexdigest()
+
+
+_HUNK_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+_DIFF_HEADER_RE = re.compile(r'^diff --git (?:"?a/(.*?)"?) (?:"?b/(.*?)"?)$')
+
+
+def _parse_unified_diff(text: str, max_lines: int):
+    """Parse ``git diff``/``git show`` patch output into files and hunks.
+
+    Line records are compact — ``t`` (add/del/ctx/meta), ``o``/``n`` old and
+    new line numbers, ``s`` text — because a commit can carry thousands.
+    """
+    files: List[Dict[str, Any]] = []
+    cur: Optional[Dict[str, Any]] = None
+    hunk: Optional[Dict[str, Any]] = None
+    old_no = new_no = 0
+    truncated = False
+
+    for count, line in enumerate(text.splitlines()):
+        if count >= max_lines:
+            truncated = True
+            break
+        if line.startswith("diff --git "):
+            m = _DIFF_HEADER_RE.match(line)
+            old_path = m.group(1) if m else line[11:]
+            new_path = m.group(2) if m else line[11:]
+            cur = {
+                "path": new_path,
+                "old_path": old_path if old_path != new_path else None,
+                "status": "modified",
+                "binary": False,
+                "hunks": [],
+            }
+            files.append(cur)
+            hunk = None
+            continue
+        if cur is None:
+            continue
+        if line.startswith("new file"):
+            cur["status"] = "added"
+        elif line.startswith("deleted file"):
+            cur["status"] = "deleted"
+        elif line.startswith("rename from"):
+            cur["status"] = "renamed"
+        elif line.startswith(("Binary files ", "GIT binary patch")):
+            cur["binary"] = True
+        elif line.startswith("+++ b/"):
+            cur["path"] = line[6:]  # authoritative (handles odd names)
+        elif line.startswith("@@"):
+            m = _HUNK_RE.match(line)
+            if not m:
+                continue
+            old_no, new_no = int(m.group(1)), int(m.group(2))
+            hunk = {"header": line, "lines": []}
+            cur["hunks"].append(hunk)
+        elif hunk is not None:
+            if line.startswith("+"):
+                hunk["lines"].append({"t": "add", "o": None, "n": new_no, "s": line[1:]})
+                new_no += 1
+            elif line.startswith("-"):
+                hunk["lines"].append({"t": "del", "o": old_no, "n": None, "s": line[1:]})
+                old_no += 1
+            elif line.startswith("\\"):
+                hunk["lines"].append({"t": "meta", "o": None, "n": None, "s": line})
+            else:
+                hunk["lines"].append({
+                    "t": "ctx", "o": old_no, "n": new_no,
+                    "s": line[1:] if line.startswith(" ") else line,
+                })
+                old_no += 1
+                new_no += 1
+
+    return files, truncated
 
 
 def _parse_decorations(decorate: str) -> List[str]:

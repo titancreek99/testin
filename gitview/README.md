@@ -32,6 +32,16 @@ there is nothing to `pip install`.
 - 🔍 **Commit details** — click any commit (or branch/tag) to see author,
   committer, dates, clickable parent links, full message, a copy-hash button
   and per-file `+/-` counts with proportional diff bars.
+- 📝 **Inline diff viewer** — expand any changed file to see its unified diff
+  with old/new line numbers, hunk headers and add/remove highlighting. Merge
+  commits are diffed against their first parent; huge diffs are truncated
+  safely.
+- 🕘 **Reflog view** — browse the `HEAD` reflog (commits, checkouts, merges,
+  resets…) and jump to any entry, even ones no longer on a branch.
+- 🔴 **Live updates** — the dashboard polls the repository and refreshes
+  itself automatically when commits land, branches move or files change; a
+  working-tree card shows staged / modified / untracked counts in real time.
+  Pausable with one click.
 - 🖥️ **Everything in one browser window** — a single-page app served locally.
 
 ## Requirements
@@ -74,6 +84,9 @@ results as JSON:
 | `GET /api/remotes` | Configured remotes and their URLs |
 | `GET /api/tags` | Tags and their target commits |
 | `GET /api/commit/<hash>` | Full detail + changed files for one commit |
+| `GET /api/diff/<hash>` | Parsed unified diff (files → hunks → lines) |
+| `GET /api/reflog?limit=N` | `HEAD` reflog entries |
+| `GET /api/state` | Change-detection token + working-tree status |
 
 The front end (in `gitview/static/`) fetches these endpoints and computes the
 commit-graph lane layout in the browser.
